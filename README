@@ -1,0 +1,4 @@
+Python Java Debugger
+--------------------
+
+A modest attempt at implementing the lacking `jdb` replacement with better features like command history, command and argument completion, wrapped sessions.
