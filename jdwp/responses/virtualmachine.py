@@ -7,7 +7,6 @@ class VersionResponse( ResponsePacket ):
 	"""Returns the JDWP version implemented by the target VM. The version string format is implementation dependent."""	
 
 	def __init__( self ):
-		super( self )
 		self.description = None
 		self.jdwp = None
 		self.vm_version = None
@@ -30,5 +29,31 @@ class VersionResponse( ResponsePacket ):
 		response.jdwp = struct.unpack( '>II', data.read( 8 ) )
 		response.vm_version = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
 		response.vm_name = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
+
+		return response
+
+class AllClassesResponse( ResponsePacket ):
+	"""Returns reference types for all classes currently loaded by the target VM."""
+
+	def __init__( self ):
+		self.classes = []
+
+	@staticmethod
+	def parse( data ):
+		"""
+		int				classes		Number of reference types that follow. 
+		Repeated classes times:
+			byte			refTypeTag	Kind of following reference type.  
+			referenceTypeID	typeID		Loaded reference type 
+			string			signature	The JNI signature of the loaded reference type 
+			int				status		The current class status.  
+		"""
+
+		response = ResponsePacket.parse( data )
+
+		data = StringIO.StringIO( response.data )
+		
+		num_classes = struct.unpack( '>I', data.read( 4 ) )
+		print 'Classes %d' % num_classes
 
 		return response
