@@ -6,7 +6,7 @@ import sys
 import cmd
 import struct
 import threading
-import jdwp
+import jdwp, jdwp.misc
 
 class PyJDBCmd( cmd.Cmd ):
 	"""The main debugging command line"""
@@ -26,11 +26,65 @@ class PyJDBCmd( cmd.Cmd ):
 		self.reader = threading.Thread( target=self.readloop )
 		self.reader.start()
 
+		self.vm = jdwp.misc.VM()
+		self.init_vm_info() # Get some data
+
+	def init_vm_info( self ):
+		"""Initializes target VM information"""
+		from jdwp.commands.virtualmachine import VersionCommand
+		from jdwp.responses.virtualmachine import VersionResponse
+
+		def set_vm_version( self, data ):
+			response = VersionResponse.parse( data )	
+			self.vm.description = response.description
+			self.vm.name = response.vm_name
+			self.vm.jdwp = response.jdwp
+			self.vm.version = response.vm_version
+
+		command = VersionCommand()
+		with self.callbacks['_lock']:
+			self.callbacks[command.id] = set_vm_version
+		self.s.send( command.assemble() )
+
+		from jdwp.commands.virtualmachine import IDSizesCommand
+		from jdwp.responses.virtualmachine import IDSizesResponse
+		
+		def set_vm_sizes( self, data ):
+			response = IDSizesResponse.parse( data )
+			self.vm.field_size = response.field
+			self.vm.method_size = response.method
+			self.vm.object_size = response.object
+			self.vm.reference_size = response.reference
+			self.vm.frame = response.frame
+
+		command = IDSizesCommand()
+		with self.callbacks['_lock']:
+			self.callbacks[command.id] = set_vm_sizes
+		self.s.send( command.assemble() )
+	
+	def lock( self ):
+		self.prompt = ''
+
+	def unlock( self ):
+		self.prompt = self.prompt_default
+		sys.stdout.write( self.prompt_default )
+		sys.stdout.flush()
+	
+	def onecmd( self, line ):
+		try:
+			cmd.Cmd.onecmd( self, line )
+		except Exception as e:
+			print e
+
 	def readloop( self ):
 		while self.active:
 			# Read thread
-			if not self.s in select.select( [ self.s ], [], [], 0.25 )[0]:
-				continue
+			try:
+				if not self.s in select.select( [ self.s ], [], [], 0.25 )[0]:
+					continue
+			except Exception:	
+				self.active = False
+				continue # Socket has gone away
 
 			length = self.s.recv( 4 ) # When we don't know how much to read
 			data = self.s.recv( struct.unpack( '>I', length )[0] )
@@ -40,8 +94,7 @@ class PyJDBCmd( cmd.Cmd ):
 				self.received( data )
 			except Exception as e: # A JDWP Exception
 				print e
-				sys.stdout.write( self.prompt_default )
-				sys.stdout.flush()
+				self.unlock()
 
 	def received( self, data ):
 		response_id = struct.unpack( '>I', data[4:8] )[0] # Get the ID
@@ -53,7 +106,7 @@ class PyJDBCmd( cmd.Cmd ):
 			callback = self.callbacks.get( response_id, None )
 			if callback:
 				del self.callbacks[response_id]
-				callback( data )
+				callback( self, data )
 
 	def default( self, line ):
 		if line == 'EOF': return self.do_exit( line )
@@ -62,26 +115,9 @@ class PyJDBCmd( cmd.Cmd ):
 
 	def do_version( self, args ):
 		"""Print version information"""
-
-		from jdwp.commands.virtualmachine import VersionCommand
-		from jdwp.responses.virtualmachine import VersionResponse
-
-		def print_version( data ):
-			response = VersionResponse.parse( data )	
-			print '%s (%s)\nJDWP %d.%d; JRE %s' % \
-				( response.description, response.vm_name,
-				response.jdwp[0], response.jdwp[1], response.vm_version )
-
-			# TODO: just add lock() unlock() prompt when expecting
-			self.prompt = self.prompt_default
-			sys.stdout.write( self.prompt )
-			sys.stdout.flush()
-
-		command = VersionCommand()
-		with self.callbacks['_lock']:
-			self.callbacks[command.id] = print_version
-		self.prompt = '' # Expecting a result any second now
-		self.s.send( command.assemble() )
+		print '%s (%s)\nJDWP %d.%d; JRE %s' % \
+			( self.vm.description, self.vm.name,
+			self.vm.jdwp[0], self.vm.jdwp[1], self.vm.version )
 
 	def do_classes( self, args ):
 		"""List currently known classes"""
@@ -89,20 +125,16 @@ class PyJDBCmd( cmd.Cmd ):
 		from jdwp.commands.virtualmachine import AllClassesCommand
 		from jdwp.responses.virtualmachine import AllClassesResponse
 
-		def print_classes( data ):
+		def print_classes( self, data ):
 			response = AllClassesResponse.parse( data )
 
 			print repr( response )
-
-			# TODO: just add lock() unlock() prompt when expecting
-			self.prompt = self.prompt_default
-			sys.stdout.write( self.prompt )
-			sys.stdout.flush()
+			self.unlock()
 
 		command = AllClassesCommand()
 		with self.callbacks['_lock']:
 			self.callbacks[command.id] = print_classes
-		self.prompt = '' # Expecting a result any second now
+		self.lock()
 		self.s.send( command.assemble() )
 
 	def do_exit( self, args ):
@@ -137,11 +169,12 @@ def attach( address ):
 	try:
 		cm = PyJDBCmd( s )
 		cm.cmdloop()
-	except KeyboardInterrupt:
+	except Exception:
 		cm.do_exit( None )
-
-	s.shutdown( socket.SHUT_RDWR )
-	s.close()
+		raise Exception
+	finally:
+		s.shutdown( socket.SHUT_RDWR )
+		s.close()
 
 def main():
 	parser = argparse.ArgumentParser( description='Debug thyself some Java' )	

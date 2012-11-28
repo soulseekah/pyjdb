@@ -15,11 +15,11 @@ class VersionResponse( ResponsePacket ):
 	@staticmethod
 	def parse( data ):
 		"""
-		string	description		Text information on the VM version 
-		int		jdwpMajor		Major JDWP Version number 
-		int		jdwpMinor		Minor JDWP Version number 
-		string	vmVersion		Target VM JRE version, as in the java.version property 
-		string	vmName			Target VM name, as in the java.vm.name property
+		string description  Text information on the VM version
+		int    jdwpMajor    Major JDWP Version number
+		int    jdwpMinor    Minor JDWP Version number
+		string vmVersion    Target VM JRE version, as in the java.version property
+		string vmName       Target VM name, as in the java.vm.name property
 		"""
 
 		response = ResponsePacket.parse( data )
@@ -41,19 +41,46 @@ class AllClassesResponse( ResponsePacket ):
 	@staticmethod
 	def parse( data ):
 		"""
-		int				classes		Number of reference types that follow. 
+		int classes Number of reference types that follow.
 		Repeated classes times:
-			byte			refTypeTag	Kind of following reference type.  
-			referenceTypeID	typeID		Loaded reference type 
-			string			signature	The JNI signature of the loaded reference type 
-			int				status		The current class status.  
+			byte            refTypeTag Kind of following reference type.
+			referenceTypeID typeID     Loaded reference type
+			string          signature  The JNI signature of the loaded reference type
+			int             status     The current class status.
 		"""
 
 		response = ResponsePacket.parse( data )
 
 		data = StringIO.StringIO( response.data )
-		
+
 		num_classes = struct.unpack( '>I', data.read( 4 ) )
-		print 'Classes %d' % num_classes
+		print 'Classes found %d' % num_classes
+
+		return response
+
+class IDSizesResponse( ResponsePacket ):
+	"""Returns the sizes of variably-sized data types in the target VM. The returned values indicate the number of bytes used by the identifiers in command and reply packets."""
+
+	def __init__( self ):
+		self.field = None
+		self.method = None
+		self.object = None
+		self.reference = None
+		self.frame = None
+
+	@staticmethod
+	def parse( data ):
+		"""
+		int fieldIDSize         fieldID size in bytes
+		int methodIDSize        methodID size in bytes
+		int objectIDSize        objectID size in bytes
+		int referenceTypeIDSize referenceTypeID size in bytes
+		int frameIDSize         frameID size in bytes
+		"""
+
+		response = ResponsePacket.parse( data )
+
+		response.field, response.method, response.object, \
+			response.reference, response.frame = struct.unpack( '>IIIII', response.data )
 
 		return response
