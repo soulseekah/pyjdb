@@ -1,46 +1,37 @@
 import argparse
 import socket
-import struct
-import StringIO 
+import cmd
+
+class PyJDBCmd( cmd.Cmd ):
+
+	"""The main debugging command line"""
+	def __init__( self, s ):
+		cmd.Cmd.__init__( self )
+
+		self.s = s
+		self.prompt = '> '
+		self.ruler = ''
 	
-class CommandPacket():
-	"""A Command Packet superclass"""
+	def default( self, line ):
+		print 'Unrecognized command: \'%s\'. Try help...' % line
+	
+	def do_version( self, args ):
+		"""print version information"""
+		# Get JVM version
+		from jdwp.commands.virtualmachine import VersionCommand
+		from jdwp.responses.virtualmachine import VersionResponse
 
-	def __init__( self ):
-		self.length = 11 # Header
-		self.id = 0
-		self.flags = 0x00
-		self.command_set = 0
-		self.command = 0
-		self.data = ''
+		command = VersionCommand()
+		self.s.send( command.assemble() )
+		response = VersionResponse.parse( self.s.recv( 128 ) )
 
-	@staticmethod
-	def parse( data ):
-		pass
-	def assemble( self ):
-		return struct.pack( '>IIBBBp',
-			self.length, self.id, self.flags, self.command_set, self.command, self.data )
-
-class ResponsePacket():
-	"""A Response Packet superclass"""
-
-	def __init__( self ):
-		self.length = 11 # Header
-		self.id = None
-		self.flags = None
-		self.error = None
-		self.data = None
-		
-	@staticmethod
-	def parse( data ):
-		response = ResponsePacket()
-		response.length, response.id, response.flags, \
-			response.error = struct.unpack( '>IIBH', data[:11] )
-		response.data = data[11:]
-		return response
-	def assemble():
-		pass
-
+		print '%s (%s)\nJDWP %d.%d; JRE %s' % \
+			( response.description, response.vm_name,
+			response.jdwp[0], response.jdwp[1], response.vm_version )
+	
+	def help_help( self ):
+		print '...uhm, really?'
+	
 def attach( address ):
 	"""Attach to a running VM"""
 
@@ -58,19 +49,8 @@ def attach( address ):
 	if handshake != 'JDWP-Handshake':
 		raise Exception( 'Unexpected JDWP handshake response: %s' % handshake )
 
-	# Get JVM version
-	command = CommandPacket()
-	command.command = 1 # Version
-	command.command_set = 1 # VirtualMachine
-	s.send( command.assemble() )
-
-	response = ResponsePacket.parse( s.recv( 128 )	)
-	data = StringIO.StringIO( response.data )
-	description = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
-	jdwp = struct.unpack( '>II', data.read( 8 ) )
-	vm_version = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
-	vm_name = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
-	print '%s (%s)\nJDWP %d.%d; JRE %s' % ( description, vm_name, jdwp[0], jdwp[1],vm_version )
+	# Start interactive command loop
+	PyJDBCmd( s ).cmdloop()
 
 def main():
 	parser = argparse.ArgumentParser( description='Debug thyself some Java' )	
