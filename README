@@ -1,4 +1,26 @@
 Python Java Debugger
---------------------
+====================
 
-A modest attempt at implementing the lacking `jdb` replacement with better features like command history, command and argument completion, wrapped sessions.
+A modest attempt at implementing the lacking `jdb` replacement with sharpened features like command history, command and argument completion, wrapped sessions, syntax highlighting.
+
+Roadmap
+-------
+
+- basic JDWP client implementation (socket transport)
+- debug sessions
+- command completion
+- argument completion
+- add some colors
+- application launcher
+- listen
+- shmem transport
+- ...
+
+Documentation
+-------------
+
+http://docs.oracle.com/javase/7/docs/technotes/guides/jpda/jdwp-spec.html
+http://docs.oracle.com/javase/7/docs/platform/jpda/jdwp/jdwp-protocol.html
+http://docs.oracle.com/javase/7/docs/technotes/tools/solaris/jdb.html
+
+Developing against JDWP 1.5
