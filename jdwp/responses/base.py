@@ -4,27 +4,25 @@ import socket
 class ResponsePacket( object ):
 	"""A Response Packet superclass"""
 
-	def __init__( self ):
+	def __init__( self, data ):
 		self.length = 11 # Header
 		self.id = None
 		self.flags = None
 		self.error = None
 		self.data = None
+
+		if self.__class__ is ResponsePacket:
+			self.parse( data )
 		
-	@staticmethod
-	def parse( data ):
+	def parse( self, data ):
 		"""Parses the header, data parsing is left up to the child"""
 
-		response = ResponsePacket()
+		self.length, self.id, self.flags, \
+			self.error = struct.unpack( '>IIBH', data[:11] )
+		self.data = data[11:]
 
-		response.length, response.id, response.flags, \
-			response.error = struct.unpack( '>IIBH', data[:11] )
-		response.data = data[11:]
-
-		if response.error:
-			raise Exception( ResponsePacket.strerr( response.error ) )
-
-		return response
+		if self.error:
+			raise Exception( ResponsePacket.strerr( self.error ) )
 
 	@staticmethod
 	def strerr( errno ):

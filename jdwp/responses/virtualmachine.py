@@ -6,14 +6,15 @@ import StringIO
 class VersionResponse( ResponsePacket ):
 	"""Returns the JDWP version implemented by the target VM. The version string format is implementation dependent."""	
 
-	def __init__( self ):
+	def __init__( self, data ):
 		self.description = None
 		self.jdwp = None
 		self.vm_version = None
 		self.vm_name = None
+		super( self.__class__, self ).__init__( data )
+		self.parse( data )
 
-	@staticmethod
-	def parse( data ):
+	def parse( self, data ):
 		"""
 		string description  Text information on the VM version
 		int    jdwpMajor    Major JDWP Version number
@@ -22,24 +23,23 @@ class VersionResponse( ResponsePacket ):
 		string vmName       Target VM name, as in the java.vm.name property
 		"""
 
-		response = ResponsePacket.parse( data )
+		super( self.__class__, self ).parse( data )
 
-		data = StringIO.StringIO( response.data )
-		response.description = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
-		response.jdwp = struct.unpack( '>II', data.read( 8 ) )
-		response.vm_version = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
-		response.vm_name = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
-
-		return response
+		data = StringIO.StringIO( self.data )
+		self.description = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
+		self.jdwp = struct.unpack( '>II', data.read( 8 ) )
+		self.vm_version = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
+		self.vm_name = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
 
 class AllClassesResponse( ResponsePacket ):
 	"""Returns reference types for all classes currently loaded by the target VM."""
 
-	def __init__( self ):
+	def __init__( self, data, vm ):
 		self.classes = []
+		super( self.__class__, self ).__init__( data )
+		self.parse( data, vm )
 
-	@staticmethod
-	def parse( data ):
+	def parse( self, data, vm ):
 		"""
 		int classes Number of reference types that follow.
 		Repeated classes times:
@@ -49,27 +49,43 @@ class AllClassesResponse( ResponsePacket ):
 			int             status     The current class status.
 		"""
 
-		response = ResponsePacket.parse( data )
+		super( self.__class__, self ).parse( data )
 
-		data = StringIO.StringIO( response.data )
+		data = StringIO.StringIO( self.data )
 
-		num_classes = struct.unpack( '>I', data.read( 4 ) )
+		num_classes = struct.unpack( '>I', data.read( 4 ) )[0]
 		print 'Classes found %d' % num_classes
 
-		return response
+		from jdwp.misc import TypeTagConstants, ClassStatusConstants
+
+		for i in xrange( num_classes ):
+			aclass = {}
+			aclass['type'] = TypeTagConstants.get( ord( data.read( 1 ) ), None )
+			id = data.read( vm.reference_size )
+			if ( vm.reference_size == 8 ):
+				aclass['id'] = struct.unpack( '>q', id )[0]
+			else:
+				raise NotImplementedError()
+			aclass['signature'] = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
+			status = struct.unpack( '>I', data.read( 4 ) )[0]
+			if aclass['type'] in ( 'CLASS', 'INTERFACE' ):
+				statuses = [ _status for code, _status in ClassStatusConstants.items() if code & status ]
+				aclass['status'] = statuses
+			self.classes.append( aclass )
 
 class IDSizesResponse( ResponsePacket ):
 	"""Returns the sizes of variably-sized data types in the target VM. The returned values indicate the number of bytes used by the identifiers in command and reply packets."""
 
-	def __init__( self ):
+	def __init__( self, data ):
 		self.field = None
 		self.method = None
 		self.object = None
 		self.reference = None
 		self.frame = None
+		super( self.__class__, self ).__init__( data )
+		self.parse( data )
 
-	@staticmethod
-	def parse( data ):
+	def parse( self, data ):
 		"""
 		int fieldIDSize         fieldID size in bytes
 		int methodIDSize        methodID size in bytes
@@ -78,9 +94,7 @@ class IDSizesResponse( ResponsePacket ):
 		int frameIDSize         frameID size in bytes
 		"""
 
-		response = ResponsePacket.parse( data )
+		super( self.__class__, self ).parse( data )
 
-		response.field, response.method, response.object, \
-			response.reference, response.frame = struct.unpack( '>IIIII', response.data )
-
-		return response
+		self.field, self.method, self.object, \
+			self.reference, self.frame = struct.unpack( '>IIIII', self.data )

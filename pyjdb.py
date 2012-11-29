@@ -2,6 +2,7 @@ import argparse
 import socket
 import select
 import time
+import traceback
 import sys
 import cmd
 import struct
@@ -23,7 +24,7 @@ class PyJDBCmd( cmd.Cmd ):
 		self.callbacks = { '_lock': threading.Lock() }
 
 		self.active = True
-		self.reader = threading.Thread( target=self.readloop )
+		self.reader = threading.Thread( target=self.poll )
 		self.reader.start()
 
 		self.vm = jdwp.misc.VM()
@@ -35,7 +36,7 @@ class PyJDBCmd( cmd.Cmd ):
 		from jdwp.responses.virtualmachine import VersionResponse
 
 		def set_vm_version( self, data ):
-			response = VersionResponse.parse( data )	
+			response = VersionResponse( data )	
 			self.vm.description = response.description
 			self.vm.name = response.vm_name
 			self.vm.jdwp = response.jdwp
@@ -50,7 +51,7 @@ class PyJDBCmd( cmd.Cmd ):
 		from jdwp.responses.virtualmachine import IDSizesResponse
 		
 		def set_vm_sizes( self, data ):
-			response = IDSizesResponse.parse( data )
+			response = IDSizesResponse( data )
 			self.vm.field_size = response.field
 			self.vm.method_size = response.method
 			self.vm.object_size = response.object
@@ -65,7 +66,7 @@ class PyJDBCmd( cmd.Cmd ):
 	def lock( self ):
 		self.prompt = ''
 
-	def unlock( self ):
+	def unlock( self ):	
 		self.prompt = self.prompt_default
 		sys.stdout.write( self.prompt_default )
 		sys.stdout.flush()
@@ -74,9 +75,9 @@ class PyJDBCmd( cmd.Cmd ):
 		try:
 			cmd.Cmd.onecmd( self, line )
 		except Exception as e:
-			print e
+			traceback.print_exc()
 
-	def readloop( self ):
+	def poll( self ):
 		while self.active:
 			# Read thread
 			try:
@@ -87,13 +88,18 @@ class PyJDBCmd( cmd.Cmd ):
 				continue # Socket has gone away
 
 			length = self.s.recv( 4 ) # When we don't know how much to read
-			data = self.s.recv( struct.unpack( '>I', length )[0] )
+			remaining = struct.unpack( '>I', length )[0] - 4 # 4 byte header
+			data = ''
+			while remaining: # Munch up all the data
+				_buffer = self.s.recv( remaining )
+				remaining = remaining - len( _buffer )
+				data = data + _buffer
 			data = length + data # Reconstruct as plain string
 
 			try:
 				self.received( data )
 			except Exception as e: # A JDWP Exception
-				print e
+				traceback.print_exc()
 				self.unlock()
 
 	def received( self, data ):
@@ -126,9 +132,18 @@ class PyJDBCmd( cmd.Cmd ):
 		from jdwp.responses.virtualmachine import AllClassesResponse
 
 		def print_classes( self, data ):
-			response = AllClassesResponse.parse( data )
+			response = AllClassesResponse( data, self.vm )
 
-			print repr( response )
+			for classname in response.classes:
+				print classname['type'].lower(),
+				print classname['signature'],
+				print '0x%08x' % ( classname['id'] ),
+				status = classname.get( 'status', None )
+				if status:
+					print ', '.join( status ).lower()
+				else:
+					print
+
 			self.unlock()
 
 		command = AllClassesCommand()
