@@ -8,6 +8,7 @@ import cmd
 import struct
 import threading
 import jdwp, jdwp.misc
+from jdwp.events import EventKindConstants
 
 class PyJDBCmd( cmd.Cmd ):
 	"""The main debugging command line"""
@@ -22,6 +23,12 @@ class PyJDBCmd( cmd.Cmd ):
 
 		# Start the socket read loop, responses and events will come in
 		self.callbacks = { '_lock': threading.Lock() }
+		# Also maintain a list of event subscribers
+		self.event_listeners = { '_lock': threading.Lock() }
+		self.event_listeners.update( { k: {} for k in EventKindConstants.keys() if isinstance( k, int ) } )
+		# Maintain a deferred packet list and init state
+		self.initted = False
+		self.deferred = []
 
 		self.active = True
 		self.reader = threading.Thread( target=self.poll )
@@ -57,6 +64,11 @@ class PyJDBCmd( cmd.Cmd ):
 			self.vm.object_size = response.object
 			self.vm.reference_size = response.reference
 			self.vm.frame = response.frame
+
+			self.initted = True
+			for packet in self.deferred:
+				self.received( packet )
+				self.deferred = []
 
 		command = IDSizesCommand()
 		with self.callbacks['_lock']:
@@ -105,9 +117,22 @@ class PyJDBCmd( cmd.Cmd ):
 	def received( self, data ):
 		response_id = struct.unpack( '>I', data[4:8] )[0] # Get the ID
 		if not response_id:
-			# This is an Event
-			# EventPacket.parse( data ), notify subscribers
-			raise NotImplementedError( 'Received Event' )
+			if not self.initted:
+				self.deferred.append( data )
+				return # Take care of later, we have not initialized yet
+				# ...in particular, we require VM IDSizes
+
+			# This is assumed to be an automatically generated Event
+			# all Events are delivered inside a CompositeEvent packet
+			from jdwp.events import CompositeEvent
+			composite = CompositeEvent( data, self.vm )
+			for event in composite.events:
+				self.lock()
+				print '* received EventType.%s' % EventKindConstants[event.kind]
+				self.unlock()
+				for listener in self.event_listeners[ event.kind ]:
+					listener( event ) # Notify all listeners for this event kind
+			return
 		with self.callbacks['_lock']:
 			callback = self.callbacks.get( response_id, None )
 			if callback:
@@ -182,9 +207,9 @@ def attach( address ):
 	try:
 		cm = PyJDBCmd( s )
 		cm.cmdloop()
-	except Exception:
-		cm.do_exit( None )
-		raise Exception
+	except Exception as e:
+		# cm.do_exit( None )
+		raise e
 	finally:
 		s.shutdown( socket.SHUT_RDWR )
 		s.close()

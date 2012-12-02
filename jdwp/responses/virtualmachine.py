@@ -68,7 +68,7 @@ class AllClassesResponse( ResponsePacket ):
 			jclass.signature = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
 			status = struct.unpack( '>I', data.read( 4 ) )[0]
 			if jclass.type in ( 'CLASS', 'INTERFACE' ):
-				statuses = [ _status for code, _status in ClassStatusConstants.items() if code & status ]
+				statuses = [ _status for code, _status in [ i for i in ClassStatusConstants.items() if isinstance( i, int ) ] if code & status ]
 				jclass.status = statuses
 			self.classes.append( jclass )
 
@@ -111,7 +111,7 @@ class AllClassesWithGenericResponse( ResponsePacket ):
 			jclass.generic = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
 			status = struct.unpack( '>I', data.read( 4 ) )[0]
 			if jclass.type in ( 'CLASS', 'INTERFACE' ):
-				statuses = [ _status for code, _status in ClassStatusConstants.items() if code & status ]
+				statuses = [ _status for code, _status in [ i for i in ClassStatusConstants.items() if isinstance( i, int ) ] if code & status ]
 				jclass.status = statuses
 			self.classes.append( jclass )
 

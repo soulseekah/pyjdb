@@ -1,4 +1,4 @@
-"""A temporary home for various classes"""
+"""A temporary home for various classes that we don't know where to put for now"""
 
 import StringIO
 
@@ -55,15 +55,18 @@ class JavaClass( object ):
 	def __unicode__( self ):
 		return self.__str__( self )
 
-# Some Contants
+# Contants
 TypeTagConstants = {
-	1: 'CLASS',
-	2: 'INTERFACE',
-	3: 'ARRAY'
-}
+	'CLASS': 1,
+	'INTERFACE': 2,
+	'ARRAY': 3,
+} # And the reverse mapping
+TypeTagConstants.update( { v: k for k, v in TypeTagConstants.items() } )
+
 ClassStatusConstants = {
-	1: 'VERIFIED',
-	2: 'PREPARED',
-	4: 'INITIALIZED',
-	8: 'ERROR'
-}
+	'VERIFIED': 1,
+	'PREPARED': 1,
+	'INITIALIZED': 4,
+	'ERROR': 8,
+} # And the reverse mapping
+ClassStatusConstants.update( { v: k for k, v in ClassStatusConstants.items() } )

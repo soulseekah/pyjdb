@@ -13,7 +13,8 @@ Roadmap
 - add some colors
 - application launcher
 - listen
-- shmem transport
+- shmem transport, other transports
+- testing, docs
 - ...
 
 Documentation
@@ -23,4 +24,4 @@ http://docs.oracle.com/javase/7/docs/technotes/guides/jpda/jdwp-spec.html
 http://docs.oracle.com/javase/7/docs/platform/jpda/jdwp/jdwp-protocol.html
 http://docs.oracle.com/javase/7/docs/technotes/tools/solaris/jdb.html
 
-Developing against JDWP 1.5
+Developing against JDWP 1.5/1.6 in OpenJDK VM 20.0 (Java 1.6.0_24) and DalvikVM 1.4 (JRE 1.5)
