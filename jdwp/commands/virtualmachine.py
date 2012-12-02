@@ -26,3 +26,12 @@ class IDSizesCommand( CommandPacket ):
 
 	def __init__( self ):
 		super( self.__class__, self ).__init__()
+
+class AllClassesWithGenericCommand( CommandPacket ):
+	"""Returns reference types for all classes currently loaded by the target VM. Both the JNI signature and the generic signature are returned for each class."""
+
+	command = 20 # AllClassesWithGeneric
+	command_set = 1 # VirtualMachine
+
+	def __init__( self ):
+		super( self.__class__, self ).__init__()

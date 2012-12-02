@@ -73,7 +73,7 @@ class PyJDBCmd( cmd.Cmd ):
 	
 	def onecmd( self, line ):
 		try:
-			cmd.Cmd.onecmd( self, line )
+			return cmd.Cmd.onecmd( self, line )
 		except Exception as e:
 			traceback.print_exc()
 
@@ -112,7 +112,10 @@ class PyJDBCmd( cmd.Cmd ):
 			callback = self.callbacks.get( response_id, None )
 			if callback:
 				del self.callbacks[response_id]
-				callback( self, data )
+				if isinstance( callback, tuple ):
+					callback[0]( self, data, **callback[1] )
+				else:
+					callback( self, data )
 
 	def default( self, line ):
 		if line == 'EOF': return self.do_exit( line )
@@ -126,35 +129,30 @@ class PyJDBCmd( cmd.Cmd ):
 			self.vm.jdwp[0], self.vm.jdwp[1], self.vm.version )
 
 	def do_classes( self, args ):
-		"""List currently known classes"""
+		"""List currently known classes, takes an optional filter argument"""
 
-		from jdwp.commands.virtualmachine import AllClassesCommand
-		from jdwp.responses.virtualmachine import AllClassesResponse
+		from jdwp.commands.virtualmachine import AllClassesWithGenericCommand
+		from jdwp.responses.virtualmachine import AllClassesWithGenericResponse
 
-		def print_classes( self, data ):
-			response = AllClassesResponse( data, self.vm )
+		def print_classes( self, data, args=None ):
+			response = AllClassesWithGenericResponse( data, self.vm )
 
-			for classname in response.classes:
-				print classname['type'].lower(),
-				print classname['signature'],
-				print '0x%08x' % ( classname['id'] ),
-				status = classname.get( 'status', None )
-				if status:
-					print ', '.join( status ).lower()
-				else:
-					print
+			for classname in sorted( [ str( classname ) for classname in response.classes ] ):
+				if not args or args in classname:
+					print classname # Filter things out
 
 			self.unlock()
 
-		command = AllClassesCommand()
+		command = AllClassesWithGenericCommand()
 		with self.callbacks['_lock']:
-			self.callbacks[command.id] = print_classes
+			self.callbacks[command.id] = ( print_classes, { 'args': args } )
 		self.lock()
 		self.s.send( command.assemble() )
 
 	def do_exit( self, args ):
 		"""Exit debugger"""
 		self.active = False
+		self.reader.join()
 		return True # Stop
 	def do_quit( self, args ):
 		"""Exit debugger"""

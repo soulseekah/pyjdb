@@ -54,24 +54,66 @@ class AllClassesResponse( ResponsePacket ):
 		data = StringIO.StringIO( self.data )
 
 		num_classes = struct.unpack( '>I', data.read( 4 ) )[0]
-		print 'Classes found %d' % num_classes
 
-		from jdwp.misc import TypeTagConstants, ClassStatusConstants
+		from jdwp.misc import TypeTagConstants, ClassStatusConstants, JavaClass
 
 		for i in xrange( num_classes ):
-			aclass = {}
-			aclass['type'] = TypeTagConstants.get( ord( data.read( 1 ) ), None )
+			jclass = JavaClass()
+			jclass.type = TypeTagConstants.get( ord( data.read( 1 ) ), None )
 			id = data.read( vm.reference_size )
 			if ( vm.reference_size == 8 ):
-				aclass['id'] = struct.unpack( '>q', id )[0]
+				jclass.id = struct.unpack( '>q', id )[0]
 			else:
 				raise NotImplementedError()
-			aclass['signature'] = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
+			jclass.signature = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
 			status = struct.unpack( '>I', data.read( 4 ) )[0]
-			if aclass['type'] in ( 'CLASS', 'INTERFACE' ):
+			if jclass.type in ( 'CLASS', 'INTERFACE' ):
 				statuses = [ _status for code, _status in ClassStatusConstants.items() if code & status ]
-				aclass['status'] = statuses
-			self.classes.append( aclass )
+				jclass.status = statuses
+			self.classes.append( jclass )
+
+class AllClassesWithGenericResponse( ResponsePacket ):
+	"""Returns reference types for all classes currently loaded by the target VM. Both the JNI signature and the generic signature are returned for each class."""
+
+	def __init__( self, data, vm ):
+		self.classes = []
+		super( self.__class__, self ).__init__( data )
+		self.parse( data, vm )
+
+	def parse( self, data, vm ):
+		"""
+		int classes Number of reference types that follow.
+		Repeated classes times:
+			byte            refTypeTag       Kind of following reference type.
+			referenceTypeID typeID           Loaded reference type
+			string          signature        The JNI signature of the loaded reference type
+			string          genericSignature The generic signature of the loaded reference type or an empty string if there is none. 
+			int             status           The current class status.
+		"""
+
+		super( self.__class__, self ).parse( data )
+
+		data = StringIO.StringIO( self.data )
+
+		num_classes = struct.unpack( '>I', data.read( 4 ) )[0]
+
+		from jdwp.misc import TypeTagConstants, ClassStatusConstants, JavaClass
+
+		for i in xrange( num_classes ):
+			jclass = JavaClass()
+			jclass.type = TypeTagConstants.get( ord( data.read( 1 ) ), None )
+			id = data.read( vm.reference_size )
+			if ( vm.reference_size == 8 ):
+				jclass.id = struct.unpack( '>q', id )[0]
+			else:
+				raise NotImplementedError()
+			jclass.signature = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
+			jclass.generic = data.read( struct.unpack( '>I', data.read( 4 ) )[0] )
+			status = struct.unpack( '>I', data.read( 4 ) )[0]
+			if jclass.type in ( 'CLASS', 'INTERFACE' ):
+				statuses = [ _status for code, _status in ClassStatusConstants.items() if code & status ]
+				jclass.status = statuses
+			self.classes.append( jclass )
 
 class IDSizesResponse( ResponsePacket ):
 	"""Returns the sizes of variably-sized data types in the target VM. The returned values indicate the number of bytes used by the identifiers in command and reply packets."""
