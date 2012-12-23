@@ -18,6 +18,15 @@ class AllClassesCommand( CommandPacket ):
 	def __init__( self ):
 		super( self.__class__, self ).__init__()
 
+class AllThreadsCommand( CommandPacket ):
+	"""Returns all thread IDs currently running in the target VM."""
+
+	command = 4 # AllThreads
+	command_set = 1 # VirtualMachine
+
+	def __init__( self ):
+		super( self.__class__, self ).__init__()
+
 class IDSizesCommand( CommandPacket ):
 	"""Returns the sizes of variably-sized data types in the target VM.The returned values indicate the number of bytes used by the identifiers in command and reply packets."""
 

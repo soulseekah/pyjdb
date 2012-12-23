@@ -9,6 +9,7 @@ import struct
 import threading
 import jdwp, jdwp.misc
 from jdwp.events import EventKindConstants
+from utils import UniqueDict
 
 class PyJDBCmd( cmd.Cmd ):
 	"""The main debugging command line"""
@@ -22,7 +23,7 @@ class PyJDBCmd( cmd.Cmd ):
 		self.ruler = ''
 
 		# Start the socket read loop, responses and events will come in
-		self.callbacks = { '_lock': threading.Lock() }
+		self.callbacks = UniqueDict( { '_lock': threading.Lock() } )
 		# Also maintain a list of event subscribers
 		self.event_listeners = { '_lock': threading.Lock() }
 		self.event_listeners.update( { k: {} for k in EventKindConstants.keys() if isinstance( k, int ) } )
@@ -136,11 +137,12 @@ class PyJDBCmd( cmd.Cmd ):
 		with self.callbacks['_lock']:
 			callback = self.callbacks.get( response_id, None )
 			if callback:
-				del self.callbacks[response_id]
-				if isinstance( callback, tuple ):
-					callback[0]( self, data, **callback[1] )
-				else:
-					callback( self, data )
+				del self.callbacks[response_id] # Pop it off
+		if callback:
+			if isinstance( callback, tuple ):
+				callback[0]( self, data, **callback[1] )
+			else:
+				callback( self, data )
 
 	def default( self, line ):
 		if line == 'EOF': return self.do_exit( line )
@@ -171,6 +173,67 @@ class PyJDBCmd( cmd.Cmd ):
 		command = AllClassesWithGenericCommand()
 		with self.callbacks['_lock']:
 			self.callbacks[command.id] = ( print_classes, { 'args': args } )
+		self.lock()
+		self.s.send( command.assemble() )
+	
+	def do_threads( self, args ):
+		"""List threads, optionally filtered by threadgroup"""
+
+		from jdwp.commands.virtualmachine import AllThreadsCommand
+		from jdwp.responses.virtualmachine import AllThreadsResponse
+
+		from jdwp.misc import JavaThread
+		threads = []
+		threads_to_process = []
+		release_lock = threading.Lock()
+
+		from jdwp.commands.threadreference import NameCommand
+		from jdwp.responses.threadreference import NameResponse
+		from jdwp.commands.threadreference import StatusCommand
+		from jdwp.responses.threadreference import StatusResponse
+
+		from jdwp.misc import ThreadStatusConstants
+
+		def print_threads( self, data, args=None ):
+			response = AllThreadsResponse( data, self.vm )
+			with release_lock:
+				threads_to_process.extend( response.ids )
+
+			# Retrieve all thread data available for each thread
+			for thread_id in response.ids:
+				thread = JavaThread( thread_id )
+
+				command = NameCommand( thread.id, self.vm )
+				with self.callbacks['_lock']:
+					self.callbacks[command.id] = ( get_thread_name, { 'thread': thread } )
+				self.s.send( command.assemble() )
+			
+		def get_thread_name( self, data, thread ):
+			response = NameResponse( data )
+			thread.name = response.name
+
+			command = StatusCommand( thread.id, self.vm )
+			with self.callbacks['_lock']:
+				self.callbacks[command.id] = ( get_thread_status, { 'thread': thread } )
+			self.s.send( command.assemble() )
+
+		def get_thread_status( self, data, thread ):
+			response = StatusResponse( data )
+			thread.status = response.status
+		
+			# When all has been acquired
+			with release_lock:
+				threads.append( thread )
+				threads_to_process.pop() # Decrease the number of threads to process
+				if not len( threads_to_process ):
+					for thread in threads:
+						status = ThreadStatusConstants.get( thread.status, 'unknown' )
+						print '%s ( %s ) %s' % ( thread.name, hex( thread.id )[:-1], status )
+					self.unlock()
+
+		command = AllThreadsCommand()
+		with self.callbacks['_lock']:
+			self.callbacks[command.id] = ( print_threads, { 'args': args } )
 		self.lock()
 		self.s.send( command.assemble() )
 

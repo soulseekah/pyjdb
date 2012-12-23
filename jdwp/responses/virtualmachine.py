@@ -72,6 +72,33 @@ class AllClassesResponse( ResponsePacket ):
 				jclass.status = statuses
 			self.classes.append( jclass )
 
+class AllThreadsResponse( ResponsePacket ):
+	"""Returns all thread IDs currently running in the target VM."""
+
+	def __init__( self, data, vm ):
+		self.ids = []
+		super( self.__class__, self ).__init__( data )
+		self.parse( data, vm )
+
+	def parse( self, data, vm ):
+		"""
+		int	threads	Number of threads that follow. 
+		Repeated threads times:
+			threadID        thread     A running thread 
+		"""
+
+		super( self.__class__, self ).parse( data )
+
+		data = StringIO.StringIO( self.data )
+		num_threads = struct.unpack( '>I', data.read( 4 ) )[0]
+
+		for i in xrange( num_threads ):
+			id = data.read( vm.object_size )
+			if ( vm.reference_size == 8 ):
+				self.ids.append( struct.unpack( '>q', id )[0] )
+			else:
+				raise NotImplementedError()
+
 class AllClassesWithGenericResponse( ResponsePacket ):
 	"""Returns reference types for all classes currently loaded by the target VM. Both the JNI signature and the generic signature are returned for each class."""
 

@@ -55,6 +55,16 @@ class JavaClass( object ):
 	def __unicode__( self ):
 		return self.__str__( self )
 
+class JavaThread( object ):
+	"""Simple container for thread objects and utility functions"""
+
+	def __init__( self, id=None ):
+		self.id = id
+		self.name = None
+		self.group = None
+		self.status = None
+		self.suspended = None
+
 # Contants
 TypeTagConstants = {
 	'CLASS': 1,
@@ -65,8 +75,22 @@ TypeTagConstants.update( { v: k for k, v in TypeTagConstants.items() } )
 
 ClassStatusConstants = {
 	'VERIFIED': 1,
-	'PREPARED': 1,
+	'PREPARED': 2,
 	'INITIALIZED': 4,
 	'ERROR': 8,
 } # And the reverse mapping
 ClassStatusConstants.update( { v: k for k, v in ClassStatusConstants.items() } )
+
+ThreadStatusConstants = {
+	'ZOMBIE': 0,
+	'RUNNING': 1,
+	'SLEEPING': 2,
+	'MONITOR': 3,
+	'WAIT': 4,  
+} # And the reverse mapping
+ThreadStatusConstants.update( { v: k for k, v in ThreadStatusConstants.items() } )
+
+SuspendStatusConstants = {
+	'SUSPEND_STATUS_SUSPENDED': 1,
+} # And the reverse mapping
+SuspendStatusConstants.update( { v: k for k, v in SuspendStatusConstants.items() } )

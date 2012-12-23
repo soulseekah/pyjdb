@@ -1,4 +1,5 @@
 import struct
+import time
 
 class CommandPacket( object ):
 	"""A Command Packet superclass"""
@@ -9,7 +10,10 @@ class CommandPacket( object ):
 
 	def __init__( self ):
 		self.length = 11 # Header length
-		self.id = id( self )
+		# When using id() the address can be garbage collected and reused within seconds
+		# so we use an additional time offset and wrap everything up to 32-bits
+		# in theory this should provide some space between shared object addresses
+		self.id = int( ( id( self ) + ( time.time() * 1000000 ) ) % 0xffffffff )
 		self.data = ''
 
 	def assemble( self ):
@@ -22,4 +26,3 @@ class CommandPacket( object ):
 		return struct.pack( '>IIBBB',
 			self.length, self.id, self.flags,
 			self.command_set, self.command ) + self.data
-
